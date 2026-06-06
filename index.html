@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sensus — cJSON Static Analysis Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            slate: { 850: '#1a2234', 950: '#0b0f19' },
+            accent: { DEFAULT: '#3b82f6', glow: '#60a5fa' }
+          },
+          fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'] }
+        }
+      }
+    };
+    mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+      themeVariables: { primaryColor: '#1e3a5f', primaryTextColor: '#e2e8f0', primaryBorderColor: '#3b82f6',
+        lineColor: '#64748b', secondaryColor: '#1e293b', tertiaryColor: '#0f172a', fontFamily: 'system-ui' } });
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .sidebar-link.active { background: rgba(59,130,246,.15); color: #60a5fa; border-left: 3px solid #3b82f6; }
+    .sidebar-link { border-left: 3px solid transparent; }
+    .metric-card { background: linear-gradient(135deg, rgba(30,41,59,.8) 0%, rgba(15,23,42,.9) 100%); }
+    .glow-border { box-shadow: 0 0 0 1px rgba(59,130,246,.2), 0 4px 24px rgba(0,0,0,.4); }
+    .section-panel { display: none; }
+    .section-panel.active { display: block; }
+    #content-area.callgraph-mode { width: 100%; max-width: none; padding: 1rem 1rem 2rem; }
+    .graph-panel { display: flex; flex-direction: column; width: 100%; }
+    #callgraph { width: 100%; }
+    .graph-viewport { width: 100%; height: clamp(400px, 58vh, 640px); flex-shrink: 0; overflow: hidden; cursor: grab; border: 1px solid rgba(51,65,85,.6); border-radius: 12px; background: #0b1120; position: relative; }
+    .graph-viewport:active { cursor: grabbing; }
+    .graph-viewport .mermaid { background: transparent !important; min-height: unset; width: 100%; height: 100%; }
+    .graph-viewport .mermaid svg { max-width: none; width: 100%; height: 100%; display: block; }
+    #mermaid-callgraph { width: 100%; height: 100%; }
+    .graph-node-highlight rect, .graph-node-highlight polygon, .graph-node-highlight path { stroke: #fbbf24 !important; stroke-width: 3px !important; filter: drop-shadow(0 0 6px rgba(251,191,36,.6)); }
+    .graph-node-highlight .nodeLabel, .graph-node-highlight foreignObject { color: #fbbf24 !important; font-weight: 600; }
+    .graph-node-dim { opacity: 0.2; transition: opacity .2s; }
+    .graph-node-match { opacity: 1 !important; }
+    .search-match-item.active { background: rgba(59,130,246,.2); border-color: rgba(59,130,246,.4); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .risk-high { background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.3); }
+    .risk-med { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); }
+    .risk-low { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); }
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(-100%); transition: transform .3s; }
+      #sidebar.open { transform: translateX(0); }
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-950 text-slate-200 antialiased">
+
+  <!-- Mobile menu toggle -->
+  <button id="menuBtn" class="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" aria-label="Toggle menu">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+
+  <div class="flex h-full min-h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed md:static inset-y-0 left-0 z-40 w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col">
+      <div class="p-6 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-blue-500/20">S</div>
+          <div>
+            <h1 class="text-lg font-bold text-white tracking-tight">Sensus</h1>
+            <p class="text-xs text-slate-500">cJSON v1.7.19 Analyzer</p>
+          </div>
+        </div>
+      </div>
+      <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+        <a href="#overview" data-section="overview" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+          Architecture Overview
+        </a>
+        <a href="#callgraph" data-section="callgraph" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Interactive Call Graph
+        </a>
+        <a href="#globals" data-section="globals" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6M12 9v6"/></svg>
+          Global State Ledger
+        </a>
+        <a href="#debt" data-section="debt" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          Documentation Debt
+        </a>
+      </nav>
+      <div class="p-4 border-t border-slate-800">
+        <div class="text-xs text-slate-500 space-y-1">
+          <p>Source: cJSON.c + cJSON.h</p>
+          <p>Author: Dave Gamble et al.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main id="main-content" class="flex-1 overflow-y-auto md:ml-0">
+      <header class="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 px-6 md:px-10 py-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 id="pageTitle" class="text-xl font-semibold text-white">Architecture Overview</h2>
+            <p id="pageSubtitle" class="text-sm text-slate-500 mt-0.5">High-level static analysis metrics for cJSON</p>
+          </div>
+          <span class="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium">
+            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+            Analysis Complete
+          </span>
+        </div>
+      </header>
+
+      <div id="content-area" class="px-6 md:px-10 py-8 max-w-7xl">
+
+        <!-- SECTION 1: Architecture Overview -->
+        <section id="overview" class="section-panel active space-y-8">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="metric-card glow-border rounded-2xl p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Lines of Code</p>
+              <p class="text-3xl font-bold text-white mt-2">3,514</p>
+              <p class="text-xs text-slate-500 mt-1">cJSON.c: 3,207 &middot; cJSON.h: 307</p>
+            </div>
+            <div class="metric-card glow-border rounded-2xl p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Functions</p>
+              <p class="text-3xl font-bold text-white mt-2">112</p>
+              <p class="text-xs text-slate-500 mt-1">77 public API &middot; 35 static/internal</p>
+            </div>
+            <div class="metric-card glow-border rounded-2xl p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Macros / Defines</p>
+              <p class="text-3xl font-bold text-white mt-2">48</p>
+              <p class="text-xs text-slate-500 mt-1">cJSON.h: 32 &middot; cJSON.c: 16</p>
+            </div>
+            <div class="metric-card glow-border rounded-2xl p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">File Sizes</p>
+              <p class="text-3xl font-bold text-white mt-2">~99 KB</p>
+              <p class="text-xs text-slate-500 mt-1">cJSON.c: 93.2 KB &middot; cJSON.h: 5.8 KB</p>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="glow-border rounded-2xl bg-slate-900/60 p-6">
+              <h3 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                #include Dependencies
+              </h3>
+              <div class="space-y-3">
+                <div>
+                  <p class="text-xs text-slate-500 mb-2 font-medium">cJSON.h</p>
+                  <div class="flex flex-wrap gap-2">
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;stddef.h&gt;</code>
+                  </div>
+                </div>
+                <div>
+                  <p class="text-xs text-slate-500 mb-2 font-medium">cJSON.c</p>
+                  <div class="flex flex-wrap gap-2">
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;string.h&gt;</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;stdio.h&gt;</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;math.h&gt;</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;stdlib.h&gt;</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;limits.h&gt;</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;ctype.h&gt;</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-blue-300 text-xs font-mono">&lt;float.h&gt;</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-amber-300 text-xs font-mono">&lt;locale.h&gt; *</code>
+                    <code class="px-2.5 py-1 rounded-md bg-slate-800 text-green-300 text-xs font-mono">"cJSON.h"</code>
+                  </div>
+                  <p class="text-xs text-slate-600 mt-2">* Conditional on <code class="text-slate-400">ENABLE_LOCALES</code></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="glow-border rounded-2xl bg-slate-900/60 p-6">
+              <h3 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                Core Data Structures
+              </h3>
+              <ul class="space-y-3 text-sm">
+                <li class="flex items-start gap-3 p-3 rounded-lg bg-slate-800/40">
+                  <code class="text-blue-400 font-mono text-xs shrink-0">cJSON</code>
+                  <span class="text-slate-400">Linked-list tree node: next, prev, child, type, valuestring, valueint, valuedouble, string</span>
+                </li>
+                <li class="flex items-start gap-3 p-3 rounded-lg bg-slate-800/40">
+                  <code class="text-blue-400 font-mono text-xs shrink-0">cJSON_Hooks</code>
+                  <span class="text-slate-400">Pluggable malloc/free function pointers for custom allocators</span>
+                </li>
+                <li class="flex items-start gap-3 p-3 rounded-lg bg-slate-800/40">
+                  <code class="text-blue-400 font-mono text-xs shrink-0">internal_hooks</code>
+                  <span class="text-slate-400">Internal allocate/deallocate/reallocate hook trio (static, cJSON.c)</span>
+                </li>
+                <li class="flex items-start gap-3 p-3 rounded-lg bg-slate-800/40">
+                  <code class="text-blue-400 font-mono text-xs shrink-0">parse_buffer</code>
+                  <span class="text-slate-400">Parser state: content, length, offset, depth, hooks</span>
+                </li>
+                <li class="flex items-start gap-3 p-3 rounded-lg bg-slate-800/40">
+                  <code class="text-blue-400 font-mono text-xs shrink-0">printbuffer</code>
+                  <span class="text-slate-400">Serializer state: buffer, length, offset, depth, noalloc, format, hooks</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="glow-border rounded-2xl bg-slate-900/60 p-6">
+            <h3 class="text-sm font-semibold text-white mb-4">Public API Surface (77 functions)</h3>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs font-mono">
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Parse*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Print*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Delete</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Create*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Add*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Get*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Is*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Detach*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Replace*</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Duplicate</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Compare</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Minify</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_InitHooks</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_malloc / cJSON_free</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_Version</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_SetValuestring</span>
+              <span class="px-2 py-1 rounded bg-slate-800/60 text-slate-300">cJSON_SetNumberHelper</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: Call Graph -->
+        <section id="callgraph" class="section-panel space-y-4">
+          <div class="graph-panel glow-border rounded-2xl bg-slate-900/60 p-4 md:p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+              <div>
+                <h3 class="text-sm font-semibold text-white">Primary Function Call Graph</h3>
+                <p class="text-xs text-slate-500 mt-1">Parse, print, create, and memory-management call chains across cJSON.c</p>
+              </div>
+              <p class="text-xs text-slate-600 shrink-0">Drag to pan &middot; Scroll to zoom &middot; ↑↓ to cycle matches</p>
+            </div>
+
+            <!-- Graph toolbar -->
+            <div class="flex flex-col lg:flex-row gap-3 mb-4">
+              <div class="relative flex-1">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input id="graph-search" type="search" placeholder="Search functions (e.g. parse_value, cJSON_Delete)…"
+                  class="w-full pl-10 pr-20 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" autocomplete="off" />
+                <span id="search-count" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 hidden"></span>
+                <div id="search-results" class="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg bg-slate-800 border border-slate-700 shadow-xl hidden"></div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button id="btn-zoom-in" type="button" title="Zoom in" class="graph-btn p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12M6 12h12"/></svg>
+                </button>
+                <button id="btn-zoom-out" type="button" title="Zoom out" class="graph-btn p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12h12"/></svg>
+                </button>
+                <button id="btn-fit" type="button" title="Fit to view" class="graph-btn px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 transition-colors text-xs font-medium">Fit</button>
+                <button id="btn-reset" type="button" title="Reset view" class="graph-btn px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 transition-colors text-xs font-medium">Reset</button>
+                <button id="btn-clear-search" type="button" title="Clear search" class="graph-btn px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 transition-colors text-xs font-medium hidden">Clear</button>
+              </div>
+            </div>
+
+            <div id="graph-viewport" class="graph-viewport">
+            <div id="mermaid-callgraph" class="mermaid text-sm">flowchart TB
+  subgraph PARSE["Parse Pipeline"]
+    P1["cJSON_Parse"] --> P2["cJSON_ParseWithOpts"]
+    P2 --> P3["cJSON_ParseWithLengthOpts"]
+    P3 --> P4["cJSON_New_Item"]
+    P3 --> P5["skip_utf8_bom"]
+    P3 --> P6["buffer_skip_whitespace"]
+    P3 --> P7["parse_value"]
+    P7 --> P8["parse_string"]
+    P7 --> P9["parse_number"]
+    P7 --> P10["parse_array"]
+    P7 --> P11["parse_object"]
+    P8 --> P12["utf16_literal_to_utf8"]
+    P12 --> P13["parse_hex4"]
+    P10 --> P7
+    P11 --> P8
+    P11 --> P7
+    P3 -.->|on fail| P14["cJSON_Delete"]
+  end
+
+  subgraph PRINT["Print Pipeline"]
+    R1["cJSON_Print"] --> R2["print"]
+    R3["cJSON_PrintUnformatted"] --> R2
+    R4["cJSON_PrintBuffered"] --> R5["print_value"]
+    R2 --> R5
+    R5 --> R6["print_string"]
+    R5 --> R7["print_number"]
+    R5 --> R8["print_array"]
+    R5 --> R9["print_object"]
+    R6 --> R10["print_string_ptr"]
+    R7 --> R11["ensure"]
+    R8 --> R5
+    R9 --> R5
+    R9 --> R10
+    R2 --> R12["update_offset"]
+  end
+
+  subgraph CREATE["Create Pipeline"]
+    C1["cJSON_CreateString"] --> C2["cJSON_New_Item"]
+    C1 --> C3["cJSON_strdup"]
+    C4["cJSON_CreateObject"] --> C2
+    C5["cJSON_CreateArray"] --> C2
+    C6["cJSON_AddItemToObject"] --> C7["add_item_to_object"]
+    C7 --> C3
+    C7 --> C8["add_item_to_array"]
+  end
+
+  subgraph MEM["Memory Management"]
+    M1["cJSON_Delete"] --> M1R["recursive child walk"]
+    M1R --> M1
+    M1 --> M2["hooks deallocate"]
+    M3["cJSON_InitHooks"] --> M4["global_hooks"]
+    M5["cJSON_malloc"] --> M4
+    M6["cJSON_free"] --> M4
+  end
+
+  subgraph UTIL["Utilities"]
+    U1["cJSON_Duplicate"] --> U2["cJSON_Duplicate_rec"]
+    U2 --> C2
+    U2 --> C3
+    U2 --> M1
+    U3["cJSON_Compare"] --> U4["compare_double"]
+    U3 --> U5["get_object_item"]
+    U5 --> U6["case_insensitive_strcmp"]
+  end
+
+  style PARSE fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
+  style PRINT fill:#1e293b,stroke:#6366f1,color:#e2e8f0
+  style CREATE fill:#1e293b,stroke:#22d3ee,color:#e2e8f0
+  style MEM fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+  style UTIL fill:#1e293b,stroke:#a78bfa,color:#e2e8f0</div>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-2 mt-4 mb-1">
+              <div class="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                <p class="text-[10px] font-semibold text-blue-400 uppercase">Parse Entry</p>
+                <p class="text-xs text-slate-400 mt-0.5">4 wrappers &rarr; <code class="font-mono">parse_value</code></p>
+              </div>
+              <div class="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-3 py-2">
+                <p class="text-[10px] font-semibold text-indigo-400 uppercase">Print Entry</p>
+                <p class="text-xs text-slate-400 mt-0.5">All paths &rarr; <code class="font-mono">print_value</code></p>
+              </div>
+              <div class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                <p class="text-[10px] font-semibold text-amber-400 uppercase">Memory Hub</p>
+                <p class="text-xs text-slate-400 mt-0.5"><code class="font-mono">global_hooks</code> centralizes alloc</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 3: Global State Ledger -->
+        <section id="globals" class="section-panel space-y-6">
+          <div class="glow-border rounded-2xl bg-slate-900/60 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-800">
+              <h3 class="text-sm font-semibold text-white">Global Variables &amp; Key Macros</h3>
+              <p class="text-xs text-slate-500 mt-1">Indexed symbols with type, scope, and defining file</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-800">
+                    <th class="px-6 py-3 font-medium">Name</th>
+                    <th class="px-6 py-3 font-medium">Type / Kind</th>
+                    <th class="px-6 py-3 font-medium">Scope</th>
+                    <th class="px-6 py-3 font-medium">Defined In</th>
+                    <th class="px-6 py-3 font-medium">Purpose</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60">
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-blue-300">global_error</td>
+                    <td class="px-6 py-3 text-slate-400">static <code class="text-xs">error</code></td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-400 border border-red-500/20">file-static</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500">Stores parse error position; read by cJSON_GetErrorPtr</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-blue-300">global_hooks</td>
+                    <td class="px-6 py-3 text-slate-400">static <code class="text-xs">internal_hooks</code></td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-400 border border-red-500/20">file-static</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500">Runtime malloc/free/realloc hooks; configured via cJSON_InitHooks</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-blue-300">version</td>
+                    <td class="px-6 py-3 text-slate-400">static <code class="text-xs">char[15]</code></td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">function-static</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500">Version string buffer inside cJSON_Version()</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-green-300">CJSON_VERSION_MAJOR</td>
+                    <td class="px-6 py-3 text-slate-400">#define → 1</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Major version component (1.7.19)</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-green-300">CJSON_VERSION_MINOR</td>
+                    <td class="px-6 py-3 text-slate-400">#define → 7</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Minor version component</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-green-300">CJSON_VERSION_PATCH</td>
+                    <td class="px-6 py-3 text-slate-400">#define → 19</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Patch version component</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-green-300">CJSON_NESTING_LIMIT</td>
+                    <td class="px-6 py-3 text-slate-400">#define → 1000</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Max parse/print nesting depth (stack overflow guard)</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-green-300">CJSON_CIRCULAR_LIMIT</td>
+                    <td class="px-6 py-3 text-slate-400">#define → 10000</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Max circular-reference depth in cJSON_Duplicate_rec</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-green-300">cJSON_IsReference</td>
+                    <td class="px-6 py-3 text-slate-400">#define → 256</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">type flag</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Marks reference nodes; skips deallocation in cJSON_Delete</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-green-300">cJSON_StringIsConst</td>
+                    <td class="px-6 py-3 text-slate-400">#define → 512</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">type flag</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Object key is a string literal; not freed on delete</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-amber-300">true / false</td>
+                    <td class="px-6 py-3 text-slate-400">#define → cJSON_bool</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">internal macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500">Boolean literals redefined for cJSON_bool type</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-amber-300">internal_malloc/free/realloc</td>
+                    <td class="px-6 py-3 text-slate-400">#define or static fn</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">platform-conditional</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500">MSVC workaround for dllimport address-of restrictions</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-amber-300">can_read / can_access_at_index</td>
+                    <td class="px-6 py-3 text-slate-400">#define (buffer bounds)</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">internal macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500">Safe buffer boundary checks during parsing</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-amber-300">cJSON_ArrayForEach</td>
+                    <td class="px-6 py-3 text-slate-400">#define (for-loop)</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Iterate linked-list children of array/object</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-6 py-3 font-mono text-amber-300">cJSON_SetIntValue</td>
+                    <td class="px-6 py-3 text-slate-400">#define (inline setter)</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
+                    <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-500">Sets valueint and valuedouble atomically</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 4: Documentation Debt -->
+        <section id="debt" class="section-panel space-y-6">
+          <div class="grid sm:grid-cols-3 gap-4">
+            <div class="metric-card glow-border rounded-2xl p-5 text-center">
+              <p class="text-3xl font-bold text-red-400">34</p>
+              <p class="text-xs text-slate-500 mt-1">Functions lacking block comments</p>
+            </div>
+            <div class="metric-card glow-border rounded-2xl p-5 text-center">
+              <p class="text-3xl font-bold text-amber-400">12</p>
+              <p class="text-xs text-slate-500 mt-1">Risky memory patterns detected</p>
+            </div>
+            <div class="metric-card glow-border rounded-2xl p-5 text-center">
+              <p class="text-3xl font-bold text-blue-400">3</p>
+              <p class="text-xs text-slate-500 mt-1">Known FIXME/TODO markers</p>
+            </div>
+          </div>
+
+          <div class="glow-border rounded-2xl bg-slate-900/60 p-6">
+            <h3 class="text-sm font-semibold text-white mb-4">Functions Missing Documentation</h3>
+            <p class="text-xs text-slate-500 mb-4">Public and static functions with no preceding block comment (/** or /* multi-line)</p>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_GetStringValue</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_GetNumberValue</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> case_insensitive_strcmp</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_strdup</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_New_Item</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> get_decimal_point</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> ensure</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> update_offset</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> compare_double</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> parse_hex4</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> utf16_literal_to_utf8</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> buffer_skip_whitespace</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> skip_utf8_bom</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> print</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> get_array_item</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> get_object_item</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> suffix_object</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> create_reference</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> add_item_to_array</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cast_away_const</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> add_item_to_object</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> replace_item_in_object</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_Duplicate_rec</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> skip_oneline_comment</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> skip_multiline_comment</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> minify_string</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsInvalid</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsFalse</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsTrue</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsBool</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsNull</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsNumber</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsString</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsArray</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsObject</label>
+              <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/40 text-xs font-mono text-slate-300 cursor-pointer hover:bg-slate-800/60"><input type="checkbox" class="rounded border-slate-600 bg-slate-700 text-blue-500" /> cJSON_IsRaw</label>
+            </div>
+          </div>
+
+          <div class="glow-border rounded-2xl bg-slate-900/60 p-6">
+            <h3 class="text-sm font-semibold text-white mb-4">Risky Memory Patterns</h3>
+            <div class="space-y-3">
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-high cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-red-500" />
+                <div>
+                  <p class="text-sm font-mono text-red-300">cJSON_Delete — recursive tree walk</p>
+                  <p class="text-xs text-slate-500 mt-1">Deeply nested JSON can cause stack overflow during deletion. No iterative alternative exists.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-high cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-red-500" />
+                <div>
+                  <p class="text-sm font-mono text-red-300">cJSON_SetValuestring — strcpy on overlapping buffers</p>
+                  <p class="text-xs text-slate-500 mt-1">Uses strcpy when new string fits in existing buffer; explicit overlap guard but still unsafe C string API.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-high cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-red-500" />
+                <div>
+                  <p class="text-sm font-mono text-red-300">cast_away_const — const pointer stripping</p>
+                  <p class="text-xs text-slate-500 mt-1">Used in Create*Reference and AddItemToObjectCS; caller must guarantee string lifetime.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-med cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-amber-500" />
+                <div>
+                  <p class="text-sm font-mono text-amber-300">ensure — manual realloc fallback</p>
+                  <p class="text-xs text-slate-500 mt-1">When reallocate hook is NULL, performs allocate + memcpy + deallocate; potential double-free on failure path.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-med cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-amber-500" />
+                <div>
+                  <p class="text-sm font-mono text-amber-300">cJSON_Minify — in-place mutation</p>
+                  <p class="text-xs text-slate-500 mt-1">Documentation warns input must be writable; passing string literals causes undefined behavior.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-med cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-amber-500" />
+                <div>
+                  <p class="text-sm font-mono text-amber-300">cJSON_GetArraySize — int overflow</p>
+                  <p class="text-xs text-slate-500 mt-1">FIXME comment: size_t counter cast to int can overflow for very large arrays.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-med cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-amber-500" />
+                <div>
+                  <p class="text-sm font-mono text-amber-300">cJSON_PrintBuffered — caller must free</p>
+                  <p class="text-xs text-slate-500 mt-1">Returns raw buffer pointer without shrink-to-fit; caller responsible for deallocation via cJSON_free.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-med cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-amber-500" />
+                <div>
+                  <p class="text-sm font-mono text-amber-300">cJSON_Duplicate_rec — depth-limited recursion</p>
+                  <p class="text-xs text-slate-500 mt-1">Uses CJSON_CIRCULAR_LIMIT but still recursive; deep trees risk stack exhaustion before limit.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-low cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-green-500" />
+                <div>
+                  <p class="text-sm font-mono text-green-300">parse_array / parse_object — depth guard</p>
+                  <p class="text-xs text-slate-500 mt-1">CJSON_NESTING_LIMIT checked before recursion; mitigates stack overflow during parse.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-low cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-green-500" />
+                <div>
+                  <p class="text-sm font-mono text-green-300">global_hooks — pluggable allocators</p>
+                  <p class="text-xs text-slate-500 mt-1">cJSON_InitHooks allows custom malloc/free; realloc disabled when hooks are non-standard.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-med cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-amber-500" />
+                <div>
+                  <p class="text-sm font-mono text-amber-300">cJSON_Compare — O(n²) object comparison</p>
+                  <p class="text-xs text-slate-500 mt-1">TODO comments acknowledge quadratic runtime for object key lookups during comparison.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 p-4 rounded-xl border risk-med cursor-pointer hover:opacity-90">
+                <input type="checkbox" class="mt-1 rounded border-slate-600 bg-slate-700 text-amber-500" />
+                <div>
+                  <p class="text-sm font-mono text-amber-300">sprintf in print_number / print_string_ptr</p>
+                  <p class="text-xs text-slate-500 mt-1">Uses sprintf into fixed-size stack buffers; bounds checked but legacy C stdio pattern.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="glow-border rounded-2xl bg-slate-900/60 p-6">
+            <h3 class="text-sm font-semibold text-white mb-4">Inline FIXME / TODO Markers</h3>
+            <div class="space-y-2 text-sm">
+              <div class="p-3 rounded-lg bg-slate-800/40 border-l-2 border-amber-500">
+                <code class="text-xs font-mono text-amber-300">cJSON_GetArraySize</code>
+                <p class="text-xs text-slate-500 mt-1">/* FIXME: Can overflow here. Cannot be fixed without breaking the API */</p>
+              </div>
+              <div class="p-3 rounded-lg bg-slate-800/40 border-l-2 border-amber-500">
+                <code class="text-xs font-mono text-amber-300">cJSON_Compare</code>
+                <p class="text-xs text-slate-500 mt-1">/* TODO This has O(n^2) runtime, which is horrible! */</p>
+              </div>
+              <div class="p-3 rounded-lg bg-slate-800/40 border-l-2 border-amber-500">
+                <code class="text-xs font-mono text-amber-300">cJSON_Compare</code>
+                <p class="text-xs text-slate-500 mt-1">/* TODO: Do this the proper way, this is just a fix for now */</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const sections = { overview: { title: 'Architecture Overview', subtitle: 'High-level static analysis metrics for cJSON' },
+      callgraph: { title: 'Interactive Call Graph', subtitle: 'Visual flowchart of primary cJSON function call chains' },
+      globals: { title: 'Global State Ledger', subtitle: 'Indexed global variables, macros, and type flags' },
+      debt: { title: 'Documentation Debt', subtitle: 'Undocumented functions and risky memory patterns' } };
+
+    let callGraphRendered = false;
+    let panZoomInstance = null;
+    let graphNodes = [];
+    let searchMatches = [];
+    let activeMatchIndex = 0;
+
+    function getNodeLabel(nodeEl) {
+      return (
+        nodeEl.querySelector('.nodeLabel')?.textContent ||
+        nodeEl.querySelector('foreignObject div')?.textContent ||
+        nodeEl.querySelector('foreignObject span')?.textContent ||
+        nodeEl.querySelector('text')?.textContent ||
+        ''
+      ).trim();
+    }
+
+    function buildGraphNodeIndex() {
+      const svg = document.querySelector('#mermaid-callgraph svg');
+      if (!svg) return;
+      graphNodes = Array.from(svg.querySelectorAll('g.node, g[class*="node"]')).map(el => ({
+        el,
+        label: getNodeLabel(el)
+      })).filter(n => n.label);
+      graphNodes = graphNodes.filter((n, i, arr) => arr.findIndex(x => x.label === n.label) === i);
+    }
+
+    function initPanZoom() {
+      const svg = document.querySelector('#mermaid-callgraph svg');
+      if (!svg || typeof svgPanZoom === 'undefined') return;
+      svg.style.maxWidth = 'none';
+      panZoomInstance = svgPanZoom(svg, {
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: false,
+        fit: true,
+        center: true,
+        minZoom: 0.2,
+        maxZoom: 8,
+        zoomScaleSensitivity: 0.25,
+        mouseWheelZoomEnabled: true,
+        preventMouseEventsDefault: true
+      });
+      const viewport = document.getElementById('graph-viewport');
+      let resizeTimer;
+      const onGraphResize = () => {
+        if (!panZoomInstance) return;
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => panZoomInstance.resize(), 100);
+      };
+      window.addEventListener('resize', onGraphResize);
+      if (viewport && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(onGraphResize).observe(viewport);
+      }
+    }
+
+    function centerOnNode(nodeEl, zoomLevel) {
+      if (!panZoomInstance || !nodeEl) return;
+      const bbox = nodeEl.getBBox();
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const sizes = panZoomInstance.getSizes();
+      const zoom = zoomLevel || Math.min(2.5, panZoomInstance.getZoom() * 1.5);
+      panZoomInstance.zoom(zoom);
+      panZoomInstance.pan({
+        x: sizes.width / 2 - cx * zoom,
+        y: sizes.height / 2 - cy * zoom
+      });
+    }
+
+    function clearSearchHighlight() {
+      graphNodes.forEach(({ el }) => {
+        el.classList.remove('graph-node-highlight', 'graph-node-dim', 'graph-node-match');
+      });
+      searchMatches = [];
+      activeMatchIndex = 0;
+      document.getElementById('search-count').classList.add('hidden');
+      document.getElementById('search-results').classList.add('hidden');
+      document.getElementById('btn-clear-search').classList.add('hidden');
+    }
+
+    function highlightMatches(query) {
+      clearSearchHighlight();
+      if (!query) return;
+      const q = query.toLowerCase();
+      searchMatches = graphNodes.filter(({ label }) => label.toLowerCase().includes(q));
+      const countEl = document.getElementById('search-count');
+      const resultsEl = document.getElementById('search-results');
+
+      if (searchMatches.length === 0) {
+        countEl.textContent = '0 matches';
+        countEl.classList.remove('hidden');
+        resultsEl.classList.add('hidden');
+        document.getElementById('btn-clear-search').classList.remove('hidden');
+        return;
+      }
+
+      graphNodes.forEach(({ el }) => el.classList.add('graph-node-dim'));
+      searchMatches.forEach(({ el }) => {
+        el.classList.remove('graph-node-dim');
+        el.classList.add('graph-node-match', 'graph-node-highlight');
+      });
+
+      countEl.textContent = `${searchMatches.length} match${searchMatches.length > 1 ? 'es' : ''}`;
+      countEl.classList.remove('hidden');
+      document.getElementById('btn-clear-search').classList.remove('hidden');
+
+      resultsEl.innerHTML = searchMatches.map(({ label }, i) =>
+        `<button type="button" data-index="${i}" class="search-match-item w-full text-left px-3 py-2 text-xs font-mono text-slate-300 hover:bg-slate-700/60 border-b border-slate-700/50 last:border-0 ${i === 0 ? 'active' : ''}">${label}</button>`
+      ).join('');
+      resultsEl.classList.remove('hidden');
+
+      resultsEl.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => focusMatch(parseInt(btn.dataset.index, 10)));
+      });
+
+      focusMatch(0);
+    }
+
+    function focusMatch(index) {
+      if (!searchMatches.length) return;
+      activeMatchIndex = index;
+      const { el, label } = searchMatches[index];
+      searchMatches.forEach(({ el: n }) => n.classList.remove('graph-node-highlight'));
+      el.classList.add('graph-node-highlight');
+      centerOnNode(el, 2.5);
+      document.getElementById('search-count').textContent =
+        `${index + 1} / ${searchMatches.length} — ${label}`;
+      document.querySelectorAll('.search-match-item').forEach((item, i) => {
+        item.classList.toggle('active', i === index);
+      });
+    }
+
+    function initGraphControls() {
+      document.getElementById('btn-zoom-in').addEventListener('click', () => panZoomInstance?.zoomIn());
+      document.getElementById('btn-zoom-out').addEventListener('click', () => panZoomInstance?.zoomOut());
+      document.getElementById('btn-fit').addEventListener('click', () => { panZoomInstance?.resize(); panZoomInstance?.fit(); panZoomInstance?.center(); });
+      document.getElementById('btn-reset').addEventListener('click', () => panZoomInstance?.resetZoom());
+      document.getElementById('btn-clear-search').addEventListener('click', () => {
+        const input = document.getElementById('graph-search');
+        input.value = '';
+        clearSearchHighlight();
+        panZoomInstance?.resetZoom();
+      });
+
+      const searchInput = document.getElementById('graph-search');
+      let debounceTimer;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => highlightMatches(searchInput.value.trim()), 150);
+      });
+      searchInput.addEventListener('keydown', (e) => {
+        if (!searchMatches.length) return;
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+          e.preventDefault();
+          focusMatch((activeMatchIndex + 1) % searchMatches.length);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          focusMatch((activeMatchIndex - 1 + searchMatches.length) % searchMatches.length);
+        } else if (e.key === 'Escape') {
+          searchInput.value = '';
+          clearSearchHighlight();
+          document.getElementById('search-results').classList.add('hidden');
+        }
+      });
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#graph-search') && !e.target.closest('#search-results')) {
+          document.getElementById('search-results').classList.add('hidden');
+        }
+      });
+      searchInput.addEventListener('focus', () => {
+        if (searchMatches.length) document.getElementById('search-results').classList.remove('hidden');
+      });
+    }
+
+    async function renderCallGraph() {
+      if (callGraphRendered) return;
+      const el = document.getElementById('mermaid-callgraph');
+      if (!el || typeof mermaid === 'undefined') return;
+      try {
+        await mermaid.run({ nodes: [el], suppressErrors: false });
+        callGraphRendered = true;
+        buildGraphNodeIndex();
+        initPanZoom();
+        initGraphControls();
+      } catch (err) {
+        console.error('Mermaid render failed:', err);
+        el.innerHTML = '<p class="text-red-400 text-sm p-4">Diagram failed to render. Check browser console for details.</p>';
+      }
+    }
+
+    function refreshGraphLayout() {
+      if (!panZoomInstance) return;
+      panZoomInstance.resize();
+      panZoomInstance.fit();
+      panZoomInstance.center();
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      document.querySelector(`[data-section="${id}"]`).classList.add('active');
+      document.getElementById('pageTitle').textContent = sections[id].title;
+      document.getElementById('pageSubtitle').textContent = sections[id].subtitle;
+      document.getElementById('sidebar').classList.remove('open');
+      const contentArea = document.getElementById('content-area');
+      const isCallgraph = id === 'callgraph';
+      contentArea.classList.toggle('callgraph-mode', isCallgraph);
+      if (isCallgraph) {
+        requestAnimationFrame(() => {
+          renderCallGraph().then(() => refreshGraphLayout());
+        });
+      }
+    }
+
+    document.querySelectorAll('.sidebar-link').forEach(link => {
+      link.addEventListener('click', e => { e.preventDefault(); showSection(link.dataset.section); });
+    });
+
+    document.getElementById('menuBtn').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.toggle('open');
+    });
+  </script>
+</body>
+</html>
