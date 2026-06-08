@@ -47,6 +47,9 @@
     .graph-node-dim { opacity: 0.2; transition: opacity .2s; }
     .graph-node-match { opacity: 1 !important; }
     .search-match-item.active { background: rgba(59,130,246,.2); border-color: rgba(59,130,246,.4); }
+    .audit-issue.active { background: rgba(59,130,246,.12); border-color: rgba(59,130,246,.35); }
+    .code-pane-before { border-left: 3px solid rgba(239,68,68,.7); }
+    .code-pane-after { border-left: 3px solid rgba(52,211,153,.7); }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
@@ -90,6 +93,10 @@
         <a href="#globals" data-section="globals" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6M12 9v6"/></svg>
           Global State Ledger
+        </a>
+        <a href="#audit-view" data-section="audit-view" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+          AI Code Audit
         </a>
         <a href="#debt" data-section="debt" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
@@ -654,6 +661,125 @@
           </div>
         </section>
 
+        <!-- SECTION 5: AI Code Audit -->
+        <section id="audit-view" class="section-panel space-y-6">
+
+          <!-- Metrics Insight Banner -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="glow-border rounded-2xl bg-slate-800/50 border border-slate-700/50 p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Structural Integrity Score</p>
+              <p class="text-3xl font-bold text-amber-400 mt-2">68/100</p>
+              <p class="text-xs text-slate-500 mt-1">Based on coupling &amp; depth factors</p>
+            </div>
+            <div class="glow-border rounded-2xl bg-slate-800/50 border border-slate-700/50 p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Untracked AI Functions</p>
+              <p class="text-3xl font-bold text-red-400 mt-2">14</p>
+              <p class="text-xs text-slate-500 mt-1">Code lacking verified structural comments</p>
+            </div>
+            <div class="glow-border rounded-2xl bg-slate-800/50 border border-slate-700/50 p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Global Mutation Vectors</p>
+              <p class="text-3xl font-bold text-rose-400 mt-2">23</p>
+              <p class="text-xs text-slate-500 mt-1">High risk write pathways detected</p>
+            </div>
+            <div class="glow-border rounded-2xl bg-slate-800/50 border border-slate-700/50 p-5">
+              <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Automated Fixes Ready</p>
+              <p class="text-3xl font-bold text-emerald-400 mt-2">6 Available</p>
+              <p class="text-xs text-slate-500 mt-1">Deterministic refactor templates generated</p>
+            </div>
+          </div>
+
+          <!-- Two-Column Audit Detail Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Column 1: Active Issues Ledger -->
+            <div class="lg:col-span-1 glow-border rounded-2xl bg-slate-900/60 border border-slate-800 p-5">
+              <h3 class="text-sm font-semibold text-white mb-4">Discovered Code Smells</h3>
+              <ul id="audit-issues-list" class="space-y-3">
+                <li>
+                  <button type="button" data-audit-issue="a" class="audit-issue active w-full text-left rounded-xl border border-red-500/30 bg-red-500/10 p-4 hover:bg-red-500/15 transition-colors">
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-red-500/20 text-red-400 border border-red-500/30">High</span>
+                      <span class="text-sm font-medium text-slate-200">Circular Include Chain Detected</span>
+                    </div>
+                    <p class="text-xs font-mono text-slate-500">network_stack.c &lt;-&gt; parser.h</p>
+                  </button>
+                </li>
+                <li>
+                  <button type="button" data-audit-issue="b" class="audit-issue w-full text-left rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 hover:bg-amber-500/15 transition-colors">
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30">Medium</span>
+                      <span class="text-sm font-medium text-slate-200">Implicit Global Side-Effect</span>
+                    </div>
+                    <p class="text-xs font-mono text-slate-500">motor_control.c &rarr; g_sys_status (ISR)</p>
+                  </button>
+                </li>
+                <li>
+                  <button type="button" data-audit-issue="c" class="audit-issue w-full text-left rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 hover:bg-blue-500/15 transition-colors">
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-blue-500/20 text-blue-400 border border-blue-500/30">Warning</span>
+                      <span class="text-sm font-medium text-slate-200">AI-Generated Block Complexity</span>
+                    </div>
+                    <p class="text-xs font-mono text-slate-500">telemetry_router.c &middot; CC = 18</p>
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Columns 2 & 3: Refactoring Companion -->
+            <div class="lg:col-span-2 glow-border rounded-2xl bg-slate-900/60 border border-slate-800 p-5 space-y-5">
+              <h3 class="text-sm font-semibold text-white">Sensus AI Refactoring Companion</h3>
+
+              <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                <span class="text-xs text-slate-500">📁</span>
+                <code id="audit-file-path" class="text-xs font-mono text-slate-300">src/drivers/motor_control.c &gt; line 142</code>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p class="text-[10px] font-semibold uppercase tracking-wider text-red-400 mb-2">Before</p>
+                  <pre id="audit-code-before" class="code-pane-before rounded-lg bg-slate-950/80 border border-slate-800 p-4 text-xs font-mono text-slate-400 leading-relaxed overflow-x-auto"><code>void TIM2_IRQHandler(void) {
+  if (TIM2-&gt;SR &amp; TIM_SR_UIF) {
+    TIM2-&gt;SR = ~TIM_SR_UIF;
+    <span class="text-red-300">g_sys_status.motor_rpm =</span>
+      <span class="text-red-300">encoder_delta * 60 / PPR;</span>
+    <span class="text-red-300">g_sys_status.fault_flags |=</span>
+      check_overcurrent();
+  }
+}</code></pre>
+                </div>
+                <div>
+                  <p class="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 mb-2">After</p>
+                  <pre id="audit-code-after" class="code-pane-after rounded-lg bg-slate-950/80 border border-slate-800 p-4 text-xs font-mono text-slate-400 leading-relaxed overflow-x-auto"><code>void TIM2_IRQHandler(void) {
+  if (TIM2-&gt;SR &amp; TIM_SR_UIF) {
+    TIM2-&gt;SR = ~TIM_SR_UIF;
+    <span class="text-emerald-300">motor_status_snapshot_t snap;</span>
+    <span class="text-emerald-300">snap = motor_compute_status(</span>
+      <span class="text-emerald-300">encoder_delta);</span>
+    <span class="text-emerald-300">motor_status_publish_atomic(&amp;snap);</span>
+  }
+}</code></pre>
+                </div>
+              </div>
+
+              <div class="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-3">
+                <div class="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                  <svg class="w-4 h-4 text-blue-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                  <p id="audit-privacy-banner" class="text-xs text-blue-300/90 leading-relaxed"><strong class="text-blue-300">Fact-Grounded Analysis:</strong> This summary was synthesized locally utilizing an AST JSON token fact-matrix. No source code was sent out over public network channels.</p>
+                </div>
+                <div id="audit-explanation">
+                  <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Why this change matters</p>
+                  <ul class="space-y-2 text-sm text-slate-400">
+                    <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">•</span> Direct ISR writes to <code class="font-mono text-xs text-slate-300">g_sys_status</code> create race conditions with the main loop reader — atomic publish isolates the mutation vector.</li>
+                    <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">•</span> Encapsulating computation in <code class="font-mono text-xs text-slate-300">motor_compute_status()</code> reduces cyclomatic complexity inside the interrupt handler.</li>
+                    <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">•</span> Safety-critical firmware domains require bounded ISR execution; deferring non-critical fault aggregation prevents priority inversion.</li>
+                    <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">•</span> The snapshot pattern enables deterministic replay during post-mortem fault analysis without locking shared globals.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
       </div>
     </main>
   </div>
@@ -662,6 +788,7 @@
     const sections = { overview: { title: 'Architecture Overview', subtitle: 'High-level static analysis metrics for cJSON' },
       callgraph: { title: 'Interactive Call Graph', subtitle: 'Visual flowchart of primary cJSON function call chains' },
       globals: { title: 'Global State Ledger', subtitle: 'Indexed global variables, macros, and type flags' },
+      'audit-view': { title: 'AI Code Smell & Architecture Audit', subtitle: 'Deterministic structural auditing combined with fact-grounded LLM refactoring analysis.' },
       debt: { title: 'Documentation Debt', subtitle: 'Undocumented functions and risky memory patterns' } };
 
     let callGraphRendered = false;
@@ -861,13 +988,68 @@
       panZoomInstance.center();
     }
 
+    const auditIssueData = {
+      a: {
+        file: 'network_stack.c <> parser.h',
+        before: `/* network_stack.c */\n#include "parser.h"\n\nvoid net_dispatch(frame_t *f) {\n  parse_frame(f);  /* pulls parser.h */\n}\n\n/* parser.h */\n#include "network_stack.h"  /* CIRCULAR */`,
+        after: `/* network_stack.h — forward declarations only */\ntypedef struct frame_t frame_t;\nvoid parse_frame(frame_t *f);\n\n/* parser.h */\n#include "network_stack_fwd.h"\n/* Break cycle: impl moved to parser.c */`,
+        explanation: [
+          'Circular includes cause incomplete type errors and force transitive coupling across translation units.',
+          'Forward declarations in a dedicated header break the compile-time dependency cycle without losing API visibility.',
+          'AI-generated scaffolding often adds reciprocal includes — AST fact-matrix flags this as a structural integrity violation.',
+          'Separating interface from implementation reduces rebuild fan-out in CI pipelines.'
+        ]
+      },
+      b: {
+        file: 'src/drivers/motor_control.c > line 142',
+        before: `void TIM2_IRQHandler(void) {\n  if (TIM2->SR & TIM_SR_UIF) {\n    TIM2->SR = ~TIM_SR_UIF;\n    g_sys_status.motor_rpm = encoder_delta * 60 / PPR;\n    g_sys_status.fault_flags |= check_overcurrent();\n  }\n}`,
+        after: `void TIM2_IRQHandler(void) {\n  if (TIM2->SR & TIM_SR_UIF) {\n    TIM2->SR = ~TIM_SR_UIF;\n    motor_status_snapshot_t snap;\n    snap = motor_compute_status(encoder_delta);\n    motor_status_publish_atomic(&snap);\n  }\n}`,
+        explanation: [
+          'Direct ISR writes to g_sys_status create race conditions with the main loop reader — atomic publish isolates the mutation vector.',
+          'Encapsulating computation in motor_compute_status() reduces cyclomatic complexity inside the interrupt handler.',
+          'Safety-critical firmware domains require bounded ISR execution; deferring non-critical fault aggregation prevents priority inversion.',
+          'The snapshot pattern enables deterministic replay during post-mortem fault analysis without locking shared globals.'
+        ]
+      },
+      c: {
+        file: 'src/telemetry/telemetry_router.c > line 89',
+        before: `int route_telemetry(pkt_t *p) {\n  if (p->type == A) { if (p->len > 0) {\n    for (int i = 0; i < p->n; i++)\n      if (p->slots[i].valid)\n        if (p->slots[i].prio > TH)\n          dispatch(p, i);\n  }} else if (p->type == B) { /* ... 12 branches */ }\n  return 0;\n}`,
+        after: `int route_telemetry(pkt_t *p) {\n  const route_handler_t *handler =\n    route_table_lookup(p->type);\n  if (!handler) return -EINVAL;\n  return handler->dispatch(p);\n}\n\n/* Table-driven handlers — CC reduced from 18 to 4 */`,
+        explanation: [
+          'Cyclomatic complexity of 18 exceeds the safety threshold (10) for audit-critical telemetry paths.',
+          'AI-generated nested conditionals are a common smell — table-driven dispatch is mechanically verifiable.',
+          'Extracting handlers enables unit testing each route independently without combinatorial branch coverage.',
+          'Deterministic refactor template ready: 6 handler stubs can be auto-generated from the AST branch matrix.'
+        ]
+      }
+    };
+
+    function renderAuditIssue(issueId) {
+      const data = auditIssueData[issueId];
+      if (!data) return;
+      document.getElementById('audit-file-path').textContent = data.file;
+      document.getElementById('audit-code-before').innerHTML = '<code>' + data.before.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</code>';
+      document.getElementById('audit-code-after').innerHTML = '<code>' + data.after.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</code>';
+      document.getElementById('audit-explanation').innerHTML =
+        '<p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Why this change matters</p>' +
+        '<ul class="space-y-2 text-sm text-slate-400">' +
+        data.explanation.map(line => `<li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">•</span>${line}</li>`).join('') +
+        '</ul>';
+      document.querySelectorAll('.audit-issue').forEach(btn => btn.classList.toggle('active', btn.dataset.auditIssue === issueId));
+    }
+
     function showSection(id) {
       document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
       document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
-      document.querySelector(`[data-section="${id}"]`).classList.add('active');
-      document.getElementById('pageTitle').textContent = sections[id].title;
-      document.getElementById('pageSubtitle').textContent = sections[id].subtitle;
+      const target = document.getElementById(id);
+      if (target) target.classList.add('active');
+      const navLink = document.querySelector(`[data-section="${id}"]`);
+      if (navLink) navLink.classList.add('active');
+      const meta = sections[id];
+      if (meta) {
+        document.getElementById('pageTitle').textContent = meta.title;
+        document.getElementById('pageSubtitle').textContent = meta.subtitle;
+      }
       document.getElementById('sidebar').classList.remove('open');
       const contentArea = document.getElementById('content-area');
       const isCallgraph = id === 'callgraph';
@@ -881,6 +1063,10 @@
 
     document.querySelectorAll('.sidebar-link').forEach(link => {
       link.addEventListener('click', e => { e.preventDefault(); showSection(link.dataset.section); });
+    });
+
+    document.querySelectorAll('.audit-issue').forEach(btn => {
+      btn.addEventListener('click', () => renderAuditIssue(btn.dataset.auditIssue));
     });
 
     document.getElementById('menuBtn').addEventListener('click', () => {
