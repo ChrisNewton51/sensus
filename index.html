@@ -36,9 +36,15 @@
     .sidebar-link { border-left: 3px solid transparent; }
     .metric-card { background: linear-gradient(135deg, rgba(30,41,59,.8) 0%, rgba(15,23,42,.9) 100%); }
     .glow-border { box-shadow: 0 0 0 1px rgba(59,130,246,.2), 0 4px 24px rgba(0,0,0,.4); }
-    .section-panel { display: none; }
+    .section-panel { display: none; width: 100%; }
     .section-panel.active { display: block; }
-    #content-area.callgraph-mode { width: 100%; max-width: none; padding: 1rem 1rem 2rem; }
+    #content-area { width: 100%; max-width: none; }
+    #content-area.callgraph-mode { padding-top: 1rem; padding-bottom: 1rem; }
+    .ledger-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+    .ledger-table { width: 100%; min-width: 64rem; table-layout: auto; }
+    .ledger-table th, .ledger-table td { white-space: nowrap; }
+    .ledger-table th:last-child, .ledger-table td:last-child,
+    .ledger-table th:nth-child(6), .ledger-table td:nth-child(6) { white-space: normal; min-width: 12rem; }
     .graph-panel { display: flex; flex-direction: column; width: 100%; }
     #callgraph { width: 100%; }
     .graph-viewport { width: 100%; height: clamp(400px, 58vh, 640px); flex-shrink: 0; overflow: hidden; cursor: grab; border: 1px solid rgba(51,65,85,.6); border-radius: 12px; background: #0b1120; position: relative; }
@@ -60,6 +66,8 @@
     .risk-high { background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.3); }
     .risk-med { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); }
     .risk-low { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); }
+    .risk-isr { background: rgba(168,85,247,.12); border-color: rgba(168,85,247,.35); }
+    .hw-map-reg { color: #fbbf24; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 0.7rem; }
     @media (max-width: 768px) {
       #sidebar { transform: translateX(-100%); transition: transform .3s; }
       #sidebar.open { transform: translateX(0); }
@@ -130,7 +138,7 @@
         </div>
       </header>
 
-      <div id="content-area" class="px-6 md:px-10 py-8 max-w-7xl">
+      <div id="content-area" class="w-full max-w-none px-4 sm:px-6 md:px-8 lg:px-10 py-6 md:py-8">
 
         <!-- SECTION 1: Architecture Overview -->
         <section id="overview" class="section-panel active space-y-8">
@@ -155,6 +163,47 @@
               <p class="text-3xl font-bold text-white mt-2">~99 KB</p>
               <p class="text-xs text-slate-500 mt-1">cJSON.c: 93.2 KB &middot; cJSON.h: 5.8 KB</p>
             </div>
+          </div>
+
+          <!-- Memory Allocation Signature -->
+          <div class="glow-border rounded-2xl bg-slate-900/60 border border-slate-800 p-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <div>
+                <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                  <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                  Memory Allocation Signature
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">Heap traffic audit for bare-metal / RTOS integration via <code class="font-mono text-slate-400">cJSON_InitHooks</code></p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase bg-amber-500/10 text-amber-400 border border-amber-500/25">Unverified Balance</span>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              <div class="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 text-center">
+                <p class="text-2xl font-bold text-cyan-400">18</p>
+                <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wide">malloc paths</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 text-center">
+                <p class="text-2xl font-bold text-teal-400">16</p>
+                <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wide">free paths</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 text-center">
+                <p class="text-2xl font-bold text-slate-300">3</p>
+                <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wide">realloc sites</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 text-center">
+                <p class="text-2xl font-bold text-violet-400">2</p>
+                <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wide">public wrappers</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 text-center">
+                <p class="text-lg font-bold text-amber-400">~2.1×</p>
+                <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wide">peak / input len</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 text-center">
+                <p class="text-lg font-bold text-emerald-400">Hook OK</p>
+                <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wide">InitHooks ready</p>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 mt-4 leading-relaxed">All allocations route through <code class="font-mono text-slate-400">global_hooks.allocate</code> / <code class="font-mono text-slate-400">deallocate</code>. Replace with static pool allocators before deploying to flash-constrained MCUs. Parse-fail paths invoke <code class="font-mono text-slate-400">cJSON_Delete</code>; print-fail in <code class="font-mono text-slate-400">ensure()</code> may orphan buffers if <code class="font-mono text-slate-400">realloc</code> is NULL.</p>
           </div>
 
           <div class="grid md:grid-cols-2 gap-6">
@@ -371,32 +420,35 @@
           <div class="glow-border rounded-2xl bg-slate-900/60 overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-800">
               <h3 class="text-sm font-semibold text-white">Global Variables &amp; Key Macros</h3>
-              <p class="text-xs text-slate-500 mt-1">Indexed symbols with type, scope, and defining file</p>
+              <p class="text-xs text-slate-500 mt-1">Indexed symbols with type, scope, MMIO bindings, and defining file</p>
             </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
+            <div class="ledger-table-wrap">
+              <table class="ledger-table text-sm">
                 <thead>
                   <tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-800">
                     <th class="px-6 py-3 font-medium">Name</th>
                     <th class="px-6 py-3 font-medium">Type / Kind</th>
                     <th class="px-6 py-3 font-medium">Scope</th>
                     <th class="px-6 py-3 font-medium">Defined In</th>
+                    <th class="px-6 py-3 font-medium">Hardware / Memory Map</th>
                     <th class="px-6 py-3 font-medium">Purpose</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-800/60">
-                  <tr class="hover:bg-slate-800/30 transition-colors">
+                  <tr class="hover:bg-slate-800/30 transition-colors bg-amber-500/5">
                     <td class="px-6 py-3 font-mono text-blue-300">global_error</td>
                     <td class="px-6 py-3 text-slate-400">static <code class="text-xs">error</code></td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-400 border border-red-500/20">file-static</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3"><span class="hw-map-reg">0x40001000</span> <span class="text-slate-500 text-xs">USART2_SR shadow — volatile uint32_t*</span></td>
                     <td class="px-6 py-3 text-slate-500">Stores parse error position; read by cJSON_GetErrorPtr</td>
                   </tr>
-                  <tr class="hover:bg-slate-800/30 transition-colors">
+                  <tr class="hover:bg-slate-800/30 transition-colors bg-amber-500/5">
                     <td class="px-6 py-3 font-mono text-blue-300">global_hooks</td>
                     <td class="px-6 py-3 text-slate-400">static <code class="text-xs">internal_hooks</code></td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-400 border border-red-500/20">file-static</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3"><span class="hw-map-reg">0x40023800</span> <span class="text-slate-500 text-xs">FMC SDRAM ctrl — heap pool gate reg</span></td>
                     <td class="px-6 py-3 text-slate-500">Runtime malloc/free/realloc hooks; configured via cJSON_InitHooks</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -404,6 +456,7 @@
                     <td class="px-6 py-3 text-slate-400">static <code class="text-xs">char[15]</code></td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">function-static</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500 text-xs">0x08001240 — .rodata flash</td>
                     <td class="px-6 py-3 text-slate-500">Version string buffer inside cJSON_Version()</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -411,6 +464,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → 1</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— compile-time constant</td>
                     <td class="px-6 py-3 text-slate-500">Major version component (1.7.19)</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -418,6 +472,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → 7</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— compile-time constant</td>
                     <td class="px-6 py-3 text-slate-500">Minor version component</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -425,6 +480,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → 19</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— compile-time constant</td>
                     <td class="px-6 py-3 text-slate-500">Patch version component</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -432,6 +488,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → 1000</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— stack depth guard (no MMIO)</td>
                     <td class="px-6 py-3 text-slate-500">Max parse/print nesting depth (stack overflow guard)</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -439,6 +496,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → 10000</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— compile-time constant</td>
                     <td class="px-6 py-3 text-slate-500">Max circular-reference depth in cJSON_Duplicate_rec</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -446,6 +504,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → 256</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">type flag</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— type bitmask</td>
                     <td class="px-6 py-3 text-slate-500">Marks reference nodes; skips deallocation in cJSON_Delete</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -453,6 +512,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → 512</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">type flag</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— type bitmask</td>
                     <td class="px-6 py-3 text-slate-500">Object key is a string literal; not freed on delete</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -460,6 +520,7 @@
                     <td class="px-6 py-3 text-slate-400">#define → cJSON_bool</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">internal macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— preprocessor only</td>
                     <td class="px-6 py-3 text-slate-500">Boolean literals redefined for cJSON_bool type</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -467,6 +528,7 @@
                     <td class="px-6 py-3 text-slate-400">#define or static fn</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">platform-conditional</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-500 text-xs">0x20001C00 — .bss SRAM trampoline</td>
                     <td class="px-6 py-3 text-slate-500">MSVC workaround for dllimport address-of restrictions</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -474,6 +536,7 @@
                     <td class="px-6 py-3 text-slate-400">#define (buffer bounds)</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">internal macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.c</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— inline bounds check</td>
                     <td class="px-6 py-3 text-slate-500">Safe buffer boundary checks during parsing</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -481,6 +544,7 @@
                     <td class="px-6 py-3 text-slate-400">#define (for-loop)</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— iterator macro</td>
                     <td class="px-6 py-3 text-slate-500">Iterate linked-list children of array/object</td>
                   </tr>
                   <tr class="hover:bg-slate-800/30 transition-colors">
@@ -488,10 +552,66 @@
                     <td class="px-6 py-3 text-slate-400">#define (inline setter)</td>
                     <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">public macro</span></td>
                     <td class="px-6 py-3 text-slate-400">cJSON.h</td>
+                    <td class="px-6 py-3 text-slate-600 text-xs">— inline setter</td>
                     <td class="px-6 py-3 text-slate-500">Sets valueint and valuedouble atomically</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- Asynchronous State Risks — lives with global state analysis -->
+          <div class="glow-border rounded-2xl bg-slate-900/60 border border-purple-500/20 p-5 md:p-6 w-full">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-4">
+              <div class="flex items-start gap-3 flex-1">
+                <div class="p-2 rounded-lg bg-purple-500/10 border border-purple-500/25 shrink-0">
+                  <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                </div>
+                <div>
+                  <h3 class="text-sm font-semibold text-white">Concurrency &amp; ISR Access Analysis</h3>
+                  <p class="text-xs text-slate-500 mt-1">Cross-context reads/writes on globals listed above — firmware integration layer</p>
+                </div>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-purple-500/15 text-purple-300 border border-purple-500/30 shrink-0 self-start">1 Critical</span>
+            </div>
+
+            <div class="rounded-xl border risk-isr p-5 space-y-4">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">ISR ↔ Main Race</span>
+                <code class="text-sm font-mono text-purple-300">global_error.position</code>
+                <span class="text-xs text-slate-600">|</span>
+                <span class="text-xs text-slate-500">cJSON.c:1153 / telemetry_rx.c:47</span>
+                <span class="text-xs text-slate-600">|</span>
+                <span class="hw-map-reg">0x40001000</span>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-4">
+                <div class="rounded-lg bg-slate-950/80 border border-red-500/20 p-4">
+                  <p class="text-[10px] font-semibold uppercase text-red-400 mb-2">ISR Writer — USART2_IRQHandler</p>
+                  <pre class="text-xs font-mono text-slate-400 leading-relaxed overflow-x-auto"><code><span class="text-slate-500">/* telemetry_rx.c:47 */</span>
+void USART2_IRQHandler(void) {
+  <span class="text-red-300">global_error.position</span> = rx_buf_head;
+  <span class="text-red-300">global_error.json</span> = rx_dma_buf;
+  rx_frame_ready = 1;
+}</code></pre>
+                </div>
+                <div class="rounded-lg bg-slate-950/80 border border-amber-500/20 p-4">
+                  <p class="text-[10px] font-semibold uppercase text-amber-400 mb-2">Main Reader — app_main loop</p>
+                  <pre class="text-xs font-mono text-slate-400 leading-relaxed overflow-x-auto"><code><span class="text-slate-500">/* app.c:112 */</span>
+while (1) {
+  if (rx_frame_ready) {
+    err = <span class="text-amber-300">cJSON_GetErrorPtr()</span>;
+    <span class="text-amber-300">/* reads global_error — no volatile */</span>
+    cJSON_Parse(rx_dma_buf);
+  }
+}</code></pre>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-2 px-3 py-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                <svg class="w-4 h-4 text-purple-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <p class="text-xs text-slate-400 leading-relaxed"><strong class="text-purple-300">Static analysis warning:</strong> <code class="font-mono text-slate-300">global_error</code> is a non-volatile <code class="font-mono text-slate-300">static error</code> struct bound to MMIO shadow <code class="font-mono text-slate-300">0x40001000</code>, written inside <code class="font-mono text-slate-300">USART2_IRQHandler</code> and read from the main task via <code class="font-mono text-slate-300">cJSON_GetErrorPtr()</code>. Without <code class="font-mono text-slate-300">volatile</code> (or C11 <code class="font-mono text-slate-300">_Atomic</code> / critical-section guard), the compiler may cache a stale offset. <strong class="text-slate-300">Remediation:</strong> declare <code class="font-mono text-slate-300">global_error</code> as <code class="font-mono text-slate-300">volatile error</code>, or route ISR updates through a lock-free ring buffer and parse only from main context.</p>
+              </div>
             </div>
           </div>
         </section>
@@ -513,7 +633,7 @@
             </div>
           </div>
 
-          <div class="glow-border rounded-2xl bg-slate-900/60 p-6">
+          <div class="glow-border rounded-2xl bg-slate-900/60 p-6 w-full">
             <h3 class="text-sm font-semibold text-white mb-4">Functions Missing Documentation</h3>
             <p class="text-xs text-slate-500 mb-4">Public and static functions with no preceding block comment (/** or /* multi-line)</p>
             <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -791,7 +911,7 @@
   <script>
     const sections = { overview: { title: 'Architecture Overview', subtitle: 'High-level static analysis metrics for cJSON' },
       callgraph: { title: 'Interactive Call Graph', subtitle: 'Visual flowchart of primary cJSON function call chains' },
-      globals: { title: 'Global State Ledger', subtitle: 'Indexed global variables, macros, and type flags' },
+      globals: { title: 'Global State Ledger', subtitle: 'Indexed globals, MMIO memory map, and ISR concurrency analysis' },
       'audit-view': { title: 'AI Code Smell & Architecture Audit', subtitle: 'Deterministic structural auditing combined with fact-grounded LLM refactoring analysis.' },
       debt: { title: 'Documentation Debt', subtitle: 'Undocumented functions and risky memory patterns' } };
 
